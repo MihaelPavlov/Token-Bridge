@@ -348,3 +348,5 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+back-end/Bridge_Project/Bridge_Project/appsettings.json
+back-end/Bridge_Project/Bridge_Project/appsettings.Development.json
