@@ -80,7 +80,7 @@ public class EventListenerBuilder
         }
     }
 
-    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, SourceEvent> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
+    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, BridgeEvent> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
     {
         var changes = await eventHandler.GetFilterChangesAsync(filter);
 
@@ -89,17 +89,17 @@ public class EventListenerBuilder
             logger.LogWarning("Event catched");
             var @event = handler(change.Event);
             var json = JsonSerializer.Serialize(@event);
-            var model = JsonSerializer.Deserialize<SourceEvent>(json);
+            var model = JsonSerializer.Deserialize<BridgeEvent>(json);
 
             if (model is null)
                 throw new ArgumentNullException();
 
             model.Id = change.Log.TransactionHash;
-            await context.SourceEvents.AddAsync(model, cancellationToken);
+            await context.BridgeEvents.AddAsync(model, cancellationToken);
         }
     }
 
-    private SourceEvent HandleLockEvent(LockEventDTO lockEvent)
+    private BridgeEvent HandleLockEvent(LockEventDTO lockEvent)
     {
         var jsonObj = new
         {
@@ -110,7 +110,7 @@ public class EventListenerBuilder
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        return new SourceEvent
+        return new BridgeEvent
         {
             PublicKeySender = lockEvent.Sender,
             EventType = (int)EventType.TokenLocked,
@@ -120,7 +120,7 @@ public class EventListenerBuilder
         };
     }
 
-    private SourceEvent HandleUnlockEvent(UnlockEventDTO unlockEvent)
+    private BridgeEvent HandleUnlockEvent(UnlockEventDTO unlockEvent)
     {
         var jsonObj = new
         {
@@ -131,7 +131,7 @@ public class EventListenerBuilder
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        return new SourceEvent
+        return new BridgeEvent
         {
             EventType = (int)EventType.TokenUnlocked,
             RequiresClaiming = false,
@@ -140,7 +140,7 @@ public class EventListenerBuilder
         };
     }
 
-    private SourceEvent HandleMintEvent(MintEventDTO mintEvent)
+    private BridgeEvent HandleMintEvent(MintEventDTO mintEvent)
     {
         var jsonObj = new
         {
@@ -151,7 +151,7 @@ public class EventListenerBuilder
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        return new SourceEvent
+        return new BridgeEvent
         {
             EventType = (int)EventType.TokenMinted,
             RequiresClaiming = false,
@@ -160,7 +160,7 @@ public class EventListenerBuilder
         };
     }
 
-    private SourceEvent HandleBurnEvent(BurnEventDTO burnEvent)
+    private BridgeEvent HandleBurnEvent(BurnEventDTO burnEvent)
     {
         var jsonObj = new
         {
@@ -171,7 +171,7 @@ public class EventListenerBuilder
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        return new SourceEvent
+        return new BridgeEvent
         {
             PublicKeySender = burnEvent.Sender,
             EventType = (int)EventType.TokenBurned,

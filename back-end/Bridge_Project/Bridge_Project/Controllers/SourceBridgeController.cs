@@ -24,7 +24,7 @@ public class SourceBridgeController : Controller
     }
 
     [HttpGet("get-unclaimed-locked-events")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<SourceEvent>))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BridgeEvent>))]
     public async Task<IActionResult> GetUnclaimedLockEvents(CancellationToken cancellationToken)
     {
         var result = await this.eventService.GetAllLockEvents(cancellationToken);
@@ -32,7 +32,7 @@ public class SourceBridgeController : Controller
     }
 
     [HttpGet("get-unclaimed-burned-events")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<SourceEvent>))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BridgeEvent>))]
     public async Task<IActionResult> GetUnclaimedBurnEvents(CancellationToken cancellationToken)
     {
         var result = await this.eventService.GetAllBurnEvents(cancellationToken);
@@ -40,7 +40,7 @@ public class SourceBridgeController : Controller
     }
 
     [HttpGet("get-by-public-key-events")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<SourceEvent>))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BridgeEvent>))]
     public async Task<IActionResult> GetUnclaimedBurnEvents(string publicKey,CancellationToken cancellationToken)
     {
         var result = await this.eventService.GetAllByPublicKey(publicKey, cancellationToken);
@@ -48,7 +48,7 @@ public class SourceBridgeController : Controller
     }
 
     [HttpGet("get-by-type-events")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<SourceEvent>))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BridgeEvent>))]
     public async Task<IActionResult> GetUnclaimedBurnEvents(EventType type, CancellationToken cancellationToken)
     {
         var result = await this.eventService.GetAllByType(type, cancellationToken);

@@ -80,12 +80,11 @@ public class SourceEventsListenerService : BackgroundService
                 logger.LogWarning(ex.Message);
             }
 
-            // If we don't put delay. 88 Line is throwing exception. And the background service stop working.
             await Task.Delay(20000, stoppingToken); // 1min
         }
     }
 
-    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, Task<SourceEvent>> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
+    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, Task<BridgeEvent>> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
     {
         var changes = await eventHandler.GetFilterChangesAsync(filter);
 
@@ -94,17 +93,17 @@ public class SourceEventsListenerService : BackgroundService
             logger.LogWarning("Source Event catched");
             var @event = await handler(change.Event);
             var json = JsonSerializer.Serialize(@event);
-            var model = JsonSerializer.Deserialize<SourceEvent>(json);
+            var model = JsonSerializer.Deserialize<BridgeEvent>(json);
 
             if (model is null)
                 throw new ArgumentNullException();
 
             model.Id = change.Log.TransactionHash;
-            await context.SourceEvents.AddAsync(model, cancellationToken);
+            await context.BridgeEvents.AddAsync(model, cancellationToken);
         }
     }
 
-    private async Task<SourceEvent> HandleLockEvent(LockEventDTO lockEvent)
+    private async Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent)
     {
         var jsonObj = new
         {
@@ -115,7 +114,7 @@ public class SourceEventsListenerService : BackgroundService
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        return new SourceEvent
+        return new BridgeEvent
         {
             PublicKeySender = lockEvent.Sender,
             EventType = (int)EventType.TokenLocked,
@@ -125,7 +124,7 @@ public class SourceEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<SourceEvent> HandleUnlockEvent(UnlockEventDTO unlockEvent)
+    private async Task<BridgeEvent> HandleUnlockEvent(UnlockEventDTO unlockEvent)
     {
         var jsonObj = new
         {
@@ -136,11 +135,11 @@ public class SourceEventsListenerService : BackgroundService
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        var lockEvent = await this.context.DestinationEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == unlockEvent.TxHash);
+        var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == unlockEvent.TxHash);
 
         lockEvent!.IsClaimed = true;
 
-        return new SourceEvent
+        return new BridgeEvent
         {
             EventType = (int)EventType.TokenUnlocked,
             RequiresClaiming = false,
@@ -149,7 +148,7 @@ public class SourceEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<SourceEvent> HandleMintEvent(MintEventDTO mintEvent)
+    private async Task<BridgeEvent> HandleMintEvent(MintEventDTO mintEvent)
     {
         var jsonObj = new
         {
@@ -160,11 +159,11 @@ public class SourceEventsListenerService : BackgroundService
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        var lockEvent = await this.context.DestinationEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == mintEvent.TxHash);
+        var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == mintEvent.TxHash);
 
         lockEvent!.IsClaimed = true;
 
-        return new SourceEvent
+        return new BridgeEvent
         {
             EventType = (int)EventType.TokenMinted,
             RequiresClaiming = false,
@@ -173,7 +172,7 @@ public class SourceEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<SourceEvent> HandleBurnEvent(BurnEventDTO burnEvent)
+    private async Task<BridgeEvent> HandleBurnEvent(BurnEventDTO burnEvent)
     {
         var jsonObj = new
         {
@@ -184,7 +183,7 @@ public class SourceEventsListenerService : BackgroundService
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        return new SourceEvent
+        return new BridgeEvent
         {
             PublicKeySender = burnEvent.Sender,
             EventType = (int)EventType.TokenBurned,

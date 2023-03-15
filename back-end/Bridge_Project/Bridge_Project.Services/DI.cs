@@ -8,7 +8,6 @@ public static class DI
     public static IServiceCollection AddServiceLayer(this IServiceCollection services)
     {
         services.AddScoped<ISourceEventService, SourceEventService>();
-        services.AddScoped<IDestinationEventService, DestinationEventService>();
 
         return services;
     }
