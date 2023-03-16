@@ -65,7 +65,7 @@ public class DestinationEventsListenerService : BackgroundService
         var blockTimestamp = TimeSpan.FromSeconds((long)block2.Timestamp.Value) - TimeSpan.FromSeconds((long)block1.Timestamp.Value);
         var milliseconds = int.Parse(blockTimestamp.TotalMilliseconds.ToString());
 
-        await CheckForEvents(web3, filterInput, stoppingToken);
+        await CheckForEvents(web3, new List<NewFilterInput> { filterInput, filterInput1, filterInput2, filterInput3 }, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -77,7 +77,7 @@ public class DestinationEventsListenerService : BackgroundService
 
                 tasks.Add(ProcessEventChangesAsync(lockEventHandler, filter, HandleLockEvent, stoppingToken));
                 tasks.Add(ProcessEventChangesAsync(unlockEventHandler, filter1, HandleUnlockEvent, stoppingToken));
-                tasks.Add(ProcessEventChangesAsync(mintEventHandler, filter2, HandleMintEventAsync, stoppingToken));
+                tasks.Add(ProcessEventChangesAsync(mintEventHandler, filter2, HandleMintEvent, stoppingToken));
                 tasks.Add(ProcessEventChangesAsync(burnEventHandler, filter3, HandleBurnEvent, stoppingToken));
 
                 await Task.WhenAll(tasks);
@@ -95,70 +95,77 @@ public class DestinationEventsListenerService : BackgroundService
         }
     }
 
-    private async Task CheckForEvents(Web3 web3, NewFilterInput filterInput, CancellationToken stoppingToken)
+    private async Task CheckForEvents(Web3 web3, List<NewFilterInput> filterInputs, CancellationToken cancellationToken)
     {
         var latestBlock = await web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
 
-        FilterLog[] result;
-        if (await this.context.BridgeEvents.CountAsync(stoppingToken) != 0)
+        List<FilterLog> result = new List<FilterLog>(); ;
+        BridgeEvent lastSavedBlockNumber;
+
+        if (await this.context.BridgeEvents.CountAsync(cancellationToken) != 0)
         {
             // if we don't have records we can maybe have the bridge deployed block number
 
-            var lastSavedBlockNumber = await this.context.BridgeEvents.OrderByDescending(x => x.CreatedDate).FirstAsync(stoppingToken);
-            filterInput.FromBlock = new BlockParameter(new HexBigInteger(BigInteger.Parse(lastSavedBlockNumber.BlockNumber)));
-            filterInput.ToBlock = new BlockParameter(latestBlock);
-            result = await web3.Eth.Filters.GetLogs.SendRequestAsync(filterInput);
+            lastSavedBlockNumber = await this.context.BridgeEvents.OrderByDescending(x => x.CreatedDate).FirstAsync(cancellationToken);
+
+            foreach (var filter in filterInputs)
+            {
+                filter.FromBlock = new BlockParameter(new HexBigInteger(BigInteger.Parse(lastSavedBlockNumber.BlockNumber)));
+                filter.ToBlock = new BlockParameter(latestBlock);
+                var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
+                result.AddRange(logs);
+            }
 
             foreach (var item in result)
             {
-                var isEventSaved = await this.context.BridgeEvents.AnyAsync(x => x.Id == item.TransactionHash, stoppingToken);
+                var isEventSaved = await this.context.BridgeEvents.AnyAsync(x => x.Id == item.TransactionHash, cancellationToken);
 
-                //TODO: Extract that logic
-                //TODO: Check and for the other events
                 if (!isEventSaved)
                 {
                     if (item.IsLogForEvent<LockEventDTO>())
                     {
                         var eventLog = item.DecodeEvent<LockEventDTO>();
 
-                        var jsonObj = new
-                        {
-                            eventLog.Event.Token,
-                            eventLog.Event.Sender,
-                            Amount = eventLog.Event.Amount.ToString()
-                        };
+                        var newEvent = await HandleLockEvent(eventLog.Event);
 
-                        var json = JsonSerializer.Serialize(jsonObj);
-
-                        var newEvent = new BridgeEvent
-                        {
-                            PublicKeySender = eventLog.Event.Sender,
-                            EventType = (int)EventType.TokenLocked,
-                            RequiresClaiming = true,
-                            IsClaimed = false,
-                            JsonData = json
-                        };
-
-                        var jsonModel = JsonSerializer.Serialize(newEvent);
-                        var model = JsonSerializer.Deserialize<BridgeEvent>(jsonModel);
-
-                        if (model is null)
-                            throw new ArgumentNullException();
-
-                        model.Id = eventLog.Log.TransactionHash;
-                        model.BlockNumber = eventLog.Log.BlockNumber.ToString();
-                        model.ChainName = "BSC";
-                        model.CreatedDate = DateTime.Now;
-                        await context.BridgeEvents.AddAsync(model, stoppingToken);
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
 
                         Console.WriteLine("LockEvent");
                     }
-                }
+                    else if (item.IsLogForEvent<UnlockEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<UnlockEventDTO>();
 
-                Console.WriteLine(item.TransactionHash);
+                        var newEvent = await HandleUnlockEvent(eventLog.Event);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("UnlockEvent");
+                    }
+                    else if (item.IsLogForEvent<MintEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<MintEventDTO>();
+
+                        var newEvent = await HandleMintEvent(eventLog.Event);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("MintEvent");
+                    }
+                    else if (item.IsLogForEvent<BurnEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<BurnEventDTO>();
+
+                        var newEvent = await HandleBurnEvent(eventLog.Event);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("BurnEvent");
+                    }
+                }
             }
 
-            await context.SaveChangesAsync(stoppingToken);
+            await context.SaveChangesAsync(cancellationToken);
         }
     }
 
@@ -170,18 +177,24 @@ public class DestinationEventsListenerService : BackgroundService
         {
             logger.LogWarning("Destination Event catched");
             var @event = await handler(change.Event);
-            var json = JsonSerializer.Serialize(@event);
-            var model = JsonSerializer.Deserialize<BridgeEvent>(json);
 
-            if (model is null)
-                throw new ArgumentNullException();
-
-            model.Id = change.Log.TransactionHash;
-            model.BlockNumber = change.Log.BlockNumber.ToString();
-            model.ChainName = "BSC";
-            model.CreatedDate = DateTime.Now;
-            await context.BridgeEvents.AddAsync(model, cancellationToken);
+            await CreateEvent(@event, change, cancellationToken);
         }
+    }
+
+    private async Task CreateEvent<T>(BridgeEvent @event, EventLog<T> change, CancellationToken cancellationToken)
+    {
+        var json = JsonSerializer.Serialize(@event);
+        var model = JsonSerializer.Deserialize<BridgeEvent>(json);
+
+        if (model is null)
+            throw new ArgumentNullException();
+
+        model.Id = change.Log.TransactionHash;
+        model.BlockNumber = change.Log.BlockNumber.ToString();
+        model.ChainName = "BSC";
+        model.CreatedDate = DateTime.Now;
+        await context.BridgeEvents.AddAsync(model, cancellationToken);
     }
 
     private async Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent)
@@ -229,7 +242,7 @@ public class DestinationEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<BridgeEvent> HandleMintEventAsync(MintEventDTO mintEvent)
+    private async Task<BridgeEvent> HandleMintEvent(MintEventDTO mintEvent)
     {
         var jsonObj = new
         {
