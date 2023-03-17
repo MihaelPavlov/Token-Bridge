@@ -4,25 +4,21 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract WrappedToken is ERC20 {
-    address public originalToken;
+    uint8 private _decimals;
 
     constructor(
-        address _originalToken,
         string memory _name,
-        string memory _symbol
+        string memory _symbol,
+        uint8 decimals
     ) ERC20(_name, _symbol) {
-        originalToken = _originalToken;
+        _decimals = decimals;
     }
 
     function mint(address account, uint256 amount) public {
-        _mint(account, amount);
+        _mint(account, amount * 10**uint256(_decimals));
     }
 
     function burn(address account, uint256 amount) public {
-        _burn(account, amount);
-    }
-
-    function getOriginalToken() public view returns (address) {
-        return originalToken;
+        _burn(account, amount * 10**uint256(_decimals));
     }
 }
