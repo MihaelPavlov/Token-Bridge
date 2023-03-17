@@ -126,7 +126,7 @@ public class DestinationEventsListenerService : BackgroundService
                     {
                         var eventLog = item.DecodeEvent<LockEventDTO>();
 
-                        var newEvent = await HandleLockEvent(eventLog.Event);
+                        var newEvent = await HandleLockEvent(eventLog.Event, eventLog.Log.TransactionHash);
 
                         await CreateEvent(newEvent, eventLog, cancellationToken);
 
@@ -136,7 +136,7 @@ public class DestinationEventsListenerService : BackgroundService
                     {
                         var eventLog = item.DecodeEvent<UnlockEventDTO>();
 
-                        var newEvent = await HandleUnlockEvent(eventLog.Event);
+                        var newEvent = await HandleUnlockEvent(eventLog.Event, eventLog.Log.TransactionHash);
 
                         await CreateEvent(newEvent, eventLog, cancellationToken);
 
@@ -146,7 +146,7 @@ public class DestinationEventsListenerService : BackgroundService
                     {
                         var eventLog = item.DecodeEvent<MintEventDTO>();
 
-                        var newEvent = await HandleMintEvent(eventLog.Event);
+                        var newEvent = await HandleMintEvent(eventLog.Event, eventLog.Log.TransactionHash);
 
                         await CreateEvent(newEvent, eventLog, cancellationToken);
 
@@ -156,7 +156,7 @@ public class DestinationEventsListenerService : BackgroundService
                     {
                         var eventLog = item.DecodeEvent<BurnEventDTO>();
 
-                        var newEvent = await HandleBurnEvent(eventLog.Event);
+                        var newEvent = await HandleBurnEvent(eventLog.Event, eventLog.Log.TransactionHash);
 
                         await CreateEvent(newEvent, eventLog, cancellationToken);
 
@@ -169,14 +169,14 @@ public class DestinationEventsListenerService : BackgroundService
         }
     }
 
-    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, Task<BridgeEvent>> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
+    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, string, Task<BridgeEvent>> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
     {
         var changes = await eventHandler.GetFilterChangesAsync(filter);
 
         foreach (var change in changes)
         {
             logger.LogWarning("Destination Event catched");
-            var @event = await handler(change.Event);
+            var @event = await handler(change.Event, change.Log.TransactionHash);
 
             await CreateEvent(@event, change, cancellationToken);
         }
@@ -197,7 +197,7 @@ public class DestinationEventsListenerService : BackgroundService
         await context.BridgeEvents.AddAsync(model, cancellationToken);
     }
 
-    private async Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent)
+    private async Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -218,7 +218,7 @@ public class DestinationEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<BridgeEvent> HandleUnlockEvent(UnlockEventDTO unlockEvent)
+    private async Task<BridgeEvent> HandleUnlockEvent(UnlockEventDTO unlockEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -232,9 +232,11 @@ public class DestinationEventsListenerService : BackgroundService
         var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == unlockEvent.TxHash);
 
         lockEvent!.IsClaimed = true;
+        lockEvent!.ClaimedFromId = txHash;
 
         return new BridgeEvent
         {
+            PublicKeySender = unlockEvent.To,
             EventType = (int)EventType.TokenUnlocked,
             RequiresClaiming = false,
             IsClaimed = false,
@@ -242,7 +244,7 @@ public class DestinationEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<BridgeEvent> HandleMintEvent(MintEventDTO mintEvent)
+    private async Task<BridgeEvent> HandleMintEvent(MintEventDTO mintEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -256,8 +258,11 @@ public class DestinationEventsListenerService : BackgroundService
         var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == mintEvent.TxHash);
         lockEvent!.IsClaimed = true;
 
+        lockEvent.ClaimedFromId = txHash;
+
         return new BridgeEvent
         {
+            PublicKeySender = mintEvent.To,
             EventType = (int)EventType.TokenMinted,
             RequiresClaiming = false,
             IsClaimed = false,
@@ -265,7 +270,7 @@ public class DestinationEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<BridgeEvent> HandleBurnEvent(BurnEventDTO burnEvent)
+    private async Task<BridgeEvent> HandleBurnEvent(BurnEventDTO burnEvent, string txHash)
     {
         var jsonObj = new
         {

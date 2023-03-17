@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Bridge_Project.Data.Migrations
 {
     [DbContext(typeof(BridgeContext))]
-    [Migration("20230315213213_InitialCreate")]
+    [Migration("20230317173247_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -38,6 +38,9 @@ namespace Bridge_Project.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("ClaimedFromId")
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("datetime2");
 
@@ -59,7 +62,18 @@ namespace Bridge_Project.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClaimedFromId");
+
                     b.ToTable("BridgeEvents");
+                });
+
+            modelBuilder.Entity("Bridge_Project.Data.Models.BridgeEvent", b =>
+                {
+                    b.HasOne("Bridge_Project.Data.Models.BridgeEvent", "ClaimedFrom")
+                        .WithMany()
+                        .HasForeignKey("ClaimedFromId");
+
+                    b.Navigation("ClaimedFrom");
                 });
 #pragma warning restore 612, 618
         }

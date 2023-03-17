@@ -11,4 +11,7 @@ public class BridgeEvent
     public string BlockNumber { get; set; } = null!;
     public string ChainName { get; set; } = null!;
     public DateTime CreatedDate { get; set; }
+
+    public string? ClaimedFromId { get; set; }
+    public BridgeEvent? ClaimedFrom { get; set; }
 }

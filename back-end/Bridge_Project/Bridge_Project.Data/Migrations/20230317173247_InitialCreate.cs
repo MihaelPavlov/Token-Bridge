@@ -23,12 +23,23 @@ namespace Bridge_Project.Data.Migrations
                     IsClaimed = table.Column<bool>(type: "bit", nullable: false),
                     BlockNumber = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     ChainName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ClaimedFromId = table.Column<string>(type: "nvarchar(450)", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_BridgeEvents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_BridgeEvents_BridgeEvents_ClaimedFromId",
+                        column: x => x.ClaimedFromId,
+                        principalTable: "BridgeEvents",
+                        principalColumn: "Id");
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BridgeEvents_ClaimedFromId",
+                table: "BridgeEvents",
+                column: "ClaimedFromId");
         }
 
         /// <inheritdoc />

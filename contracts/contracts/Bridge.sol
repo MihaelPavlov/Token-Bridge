@@ -70,7 +70,6 @@ contract BridgeContract {
         emit Unlock(txHash, originalToken, msg.sender, amount);
     }
 
-    // Mint when we don't have equivalent to the sourceToken
     function mint(
         string memory txHash,
         address sourceToken,

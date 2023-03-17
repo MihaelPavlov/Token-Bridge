@@ -80,18 +80,18 @@ public class SourceEventsListenerService : BackgroundService
                 logger.LogWarning(ex.Message);
             }
 
-            await Task.Delay(20000, stoppingToken); // 1min
+            await Task.Delay(10000, stoppingToken); // 1min
         }
     }
 
-    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, Task<BridgeEvent>> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
+    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, string, Task<BridgeEvent>> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
     {
         var changes = await eventHandler.GetFilterChangesAsync(filter);
 
         foreach (var change in changes)
         {
             logger.LogWarning("Source Event catched");
-            var @event = await handler(change.Event);
+            var @event = await handler(change.Event, change.Log.TransactionHash);
             var json = JsonSerializer.Serialize(@event);
             var model = JsonSerializer.Deserialize<BridgeEvent>(json);
 
@@ -99,11 +99,15 @@ public class SourceEventsListenerService : BackgroundService
                 throw new ArgumentNullException();
 
             model.Id = change.Log.TransactionHash;
+            model.BlockNumber = change.Log.BlockNumber.ToString();
+            model.ChainName = "Ethereum";
+            model.CreatedDate = DateTime.Now;
+
             await context.BridgeEvents.AddAsync(model, cancellationToken);
         }
     }
 
-    private async Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent)
+    private async Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent ,string txHash)
     {
         var jsonObj = new
         {
@@ -124,7 +128,7 @@ public class SourceEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<BridgeEvent> HandleUnlockEvent(UnlockEventDTO unlockEvent)
+    private async Task<BridgeEvent> HandleUnlockEvent(UnlockEventDTO unlockEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -138,9 +142,11 @@ public class SourceEventsListenerService : BackgroundService
         var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == unlockEvent.TxHash);
 
         lockEvent!.IsClaimed = true;
+        lockEvent.ClaimedFromId = txHash;
 
         return new BridgeEvent
         {
+            PublicKeySender = unlockEvent.To,
             EventType = (int)EventType.TokenUnlocked,
             RequiresClaiming = false,
             IsClaimed = false,
@@ -148,7 +154,7 @@ public class SourceEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<BridgeEvent> HandleMintEvent(MintEventDTO mintEvent)
+    private async Task<BridgeEvent> HandleMintEvent(MintEventDTO mintEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -162,9 +168,11 @@ public class SourceEventsListenerService : BackgroundService
         var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == mintEvent.TxHash);
 
         lockEvent!.IsClaimed = true;
+        lockEvent.ClaimedFromId = txHash;
 
         return new BridgeEvent
         {
+            PublicKeySender = mintEvent.To,
             EventType = (int)EventType.TokenMinted,
             RequiresClaiming = false,
             IsClaimed = false,
@@ -172,7 +180,7 @@ public class SourceEventsListenerService : BackgroundService
         };
     }
 
-    private async Task<BridgeEvent> HandleBurnEvent(BurnEventDTO burnEvent)
+    private async Task<BridgeEvent> HandleBurnEvent(BurnEventDTO burnEvent, string txHash)
     {
         var jsonObj = new
         {
