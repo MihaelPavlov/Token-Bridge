@@ -7,6 +7,7 @@ import { MyToken } from "./../typechain-types/contracts/Tokens/MyToken";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { access } from "../typechain-types/@openzeppelin/contracts";
+import { ERC20Permit__factory } from "../typechain-types";
 
 describe("Bridge", function () {
     let bridgeFactory: BridgeContract__factory;
@@ -116,11 +117,11 @@ describe("Bridge", function () {
         });
 
         it("Successfully emit event for (Created WrappedToken)", async () => {
-            await expect(await bridge.mint("txHash", myToken.address, 100000, "TestToken", "TT")).to.emit(bridge, "WrappedTokenCreated");
+            await expect(await bridge.mint("txHash", myToken.address, 1, "TestToken", "TT")).to.emit(bridge, "WrappedTokenCreated");
         });
 
         it("Successfully emit event for (Mint)", async () => {
-            await expect(await bridge.mint("txHash", myToken.address, 100000, "TestToken", "TT")).to.emit(bridge, "Mint");
+            await expect(await bridge.mint("txHash", myToken.address, 1, "TestToken", "TT")).to.emit(bridge, "Mint");
         });
 
         it("Successfully mint tokens to the sender", async () => {
@@ -133,11 +134,50 @@ describe("Bridge", function () {
             if (event) {
                 const { txHash, token, to, amount } = bridge.interface.decodeEventLog("Mint", event.data, event.topics);
 
-             expect(await wrappedToken.attach(token).balanceOf(addr1.address)).to.equal("1000000000000000000");
-             expect(amount).to.equal("1");
+                expect(await wrappedToken.attach(token).balanceOf(addr1.address)).to.equal("1000000000000000000");
+                expect(amount).to.equal("1");
             }
 
             await bridge.connect(addr1).mint("txHash", myToken.address, 1, "TestToken", "TT")
+        });
+    });
+
+    describe("burn", function () {
+        it("Should be unsuccessfully and return error", async () => {
+            await expect(bridge.burn("0x0000000000000000000000000000000000000000", 1)).to.revertedWith("There is no wrapped token with this address")
+        });
+
+        it("Successfully removed tokens from burn", async () => {
+            const [owner, addr1] = await ethers.getSigners();
+
+            const tx = await bridge.connect(addr1).mint("txHash", myToken.address, 1, "TestToken", "TT");
+            const receipt = await tx.wait();
+            const event = receipt.events?.find(e => e.event === "Mint");
+
+            if (event) {
+                const { token } = bridge.interface.decodeEventLog("Mint", event.data, event.topics);
+                expect(await bridge.connect(addr1).sourceToWrappedTokenMap(myToken.address)).to.equal(token);
+                expect(await bridge.connect(addr1).wrappedToSourceTokenMap(token)).to.equal(myToken.address);
+                expect(await wrappedToken.attach(token).balanceOf(addr1.address)).to.equal("1000000000000000000");
+                await expect(await bridge.connect(addr1).burn(token, 1)).to.emit(bridge,"Burn").withArgs(myToken.address,addr1.address,1);
+                expect(await wrappedToken.attach(token).balanceOf(addr1.address)).to.equal(0);
+            }
+        });
+
+        it("Should successfully burn tokens and emit event", async () => {
+            const [owner, addr1] = await ethers.getSigners();
+
+            const tx = await bridge.connect(addr1).mint("txHash", myToken.address, 1, "TestToken", "TT");
+            const receipt = await tx.wait();
+            const event = receipt.events?.find(e => e.event === "Mint");
+
+            if (event) {
+                const { token } = bridge.interface.decodeEventLog("Mint", event.data, event.topics);
+
+                expect(await bridge.connect(addr1).sourceToWrappedTokenMap(myToken.address)).to.equal(token);
+
+                await expect(await bridge.connect(addr1).burn(token, 1)).to.emit(bridge, "Burn").withArgs(myToken.address, addr1.address, 1);
+            }
         });
     });
 })

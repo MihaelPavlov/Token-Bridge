@@ -4,8 +4,10 @@ using Bridge_Project.Data.Models;
 using Bridge_Project.EventsDTO;
 using Microsoft.EntityFrameworkCore;
 using Nethereum.ABI.FunctionEncoding.Attributes;
+using Nethereum.BlockchainProcessing.BlockStorage.Entities;
 using Nethereum.Contracts;
 using Nethereum.Hex.HexTypes;
+using Nethereum.RPC.Eth.DTOs;
 using Nethereum.Web3;
 using Nethereum.Web3.Accounts;
 using System.Numerics;
@@ -21,12 +23,14 @@ public class SourceEventsListenerService : BackgroundService
     private readonly BridgeContext context;
     private readonly ILogger<BridgeContext> logger;
     private readonly IConfiguration configuration;
+    private readonly DbContextOptions<BridgeContext> _options;
 
-    public SourceEventsListenerService(BridgeContext context, ILogger<BridgeContext> logger, IConfiguration configuration)
+    public SourceEventsListenerService(BridgeContext context, ILogger<BridgeContext> logger, IConfiguration configuration, DbContextOptions<BridgeContext> options)
     {
         this.context = context;
         this.logger = logger;
         this.configuration = configuration;
+        _options = options;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -54,6 +58,9 @@ public class SourceEventsListenerService : BackgroundService
 
         var filterInput3 = burnEventHandler.CreateFilterInput();
         var filter3 = await burnEventHandler.CreateFilterAsync(filterInput3);
+
+        await CheckForEvents(web3, new List<NewFilterInput> { filterInput, filterInput1, filterInput2, filterInput3 }, stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             logger.LogWarning("Inside While Loop");
@@ -84,30 +91,211 @@ public class SourceEventsListenerService : BackgroundService
         }
     }
 
+    private async Task CheckForEvents(Web3 web3, List<NewFilterInput> filterInputs, CancellationToken cancellationToken)
+    {
+        var latestBlock = await web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+
+        List<FilterLog> result = new List<FilterLog>(); ;
+        BridgeEvent lastSavedBlockNumber;
+
+        var count = 0;
+        using (var context = new BridgeContext(_options))
+        {
+            count = await context.BridgeEvents.Where(x=>x.ChainName == "Ethereum").CountAsync(cancellationToken);
+        }
+
+        if (count != 0)
+        {
+            // if we don't have records we can maybe have the bridge deployed block number
+            using (var context = new BridgeContext(_options))
+            {
+                lastSavedBlockNumber = await context.BridgeEvents.Where(x=>x.ChainName == "Ethereum").OrderByDescending(x => x.BlockNumber).FirstAsync(cancellationToken);
+            }
+
+            var batchSize = 5000;
+            var fromBlock = new BlockParameter(new HexBigInteger(BigInteger.Parse(lastSavedBlockNumber.BlockNumber)));
+            for (var i = fromBlock.BlockNumber; i <= latestBlock.Value; i.Value += batchSize)
+            {
+                var batchEnd = i.Value + batchSize - 1;
+                if (batchEnd > latestBlock.Value)
+                {
+                    batchEnd = latestBlock.Value;
+                }
+
+                Console.WriteLine($"From block {fromBlock.BlockNumber} to {batchEnd}");
+                foreach (var filter in filterInputs)
+                {
+                    filter.FromBlock = fromBlock;
+                    filter.ToBlock = new BlockParameter(batchEnd.ToHexBigInteger());
+                    var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
+                    result.AddRange(logs);
+                    Console.WriteLine($"Count events -> {logs.Count()}");
+
+                }
+            }
+
+            foreach (var item in result)
+            {
+                bool isEventSaved = false;
+                using (var context = new BridgeContext(_options))
+                {
+                    isEventSaved = await this.context.BridgeEvents.AnyAsync(x => x.Id == item.TransactionHash, cancellationToken);
+                }
+
+                if (!isEventSaved)
+                {
+                    if (item.IsLogForEvent<LockEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<LockEventDTO>();
+
+                        var newEvent = await HandleLockEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("LockEvent");
+                    }
+                    else if (item.IsLogForEvent<UnlockEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<UnlockEventDTO>();
+
+                        var newEvent = await HandleUnlockEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("UnlockEvent");
+                    }
+                    else if (item.IsLogForEvent<MintEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<MintEventDTO>();
+
+                        var newEvent = await HandleMintEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("MintEvent");
+                    }
+                    else if (item.IsLogForEvent<BurnEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<BurnEventDTO>();
+
+                        var newEvent = await HandleBurnEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("BurnEvent");
+                    }
+                }
+            }
+
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            // if we don't have any records start doingsomething like pagination
+            var batchSize = 1000;
+            var fromBlock = new BlockParameter(new HexBigInteger(BigInteger.Parse("3076964")));
+            for (var i = fromBlock.BlockNumber; i <= latestBlock.Value; i.Value += batchSize)
+            {
+                var batchEnd = i.Value + batchSize - 1;
+                if (batchEnd > latestBlock.Value)
+                {
+                    batchEnd = latestBlock.Value;
+                }
+
+                Console.WriteLine($"From block {fromBlock.BlockNumber} to {batchEnd}");
+                foreach (var filter in filterInputs)
+                {
+                    filter.FromBlock = fromBlock;
+                    filter.ToBlock = new BlockParameter(batchEnd.ToHexBigInteger());
+                    var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
+                    result.AddRange(logs);
+                    Console.WriteLine($"Count events -> {logs.Count()}");
+
+                }
+            }
+
+            foreach (var item in result)
+            {
+                var isEventSaved = await this.context.BridgeEvents.AnyAsync(x => x.Id == item.TransactionHash, cancellationToken);
+
+                if (!isEventSaved)
+                {
+                    if (item.IsLogForEvent<LockEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<LockEventDTO>();
+
+                        var newEvent = await HandleLockEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("LockEvent");
+                    }
+                    else if (item.IsLogForEvent<UnlockEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<UnlockEventDTO>();
+
+                        var newEvent = await HandleUnlockEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("UnlockEvent");
+                    }
+                    else if (item.IsLogForEvent<MintEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<MintEventDTO>();
+
+                        var newEvent = await HandleMintEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("MintEvent");
+                    }
+                    else if (item.IsLogForEvent<BurnEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<BurnEventDTO>();
+
+                        var newEvent = await HandleBurnEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("BurnEvent");
+                    }
+                }
+            }
+
+            await context.SaveChangesAsync(cancellationToken);
+        }
+    }
+
     private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, string, Task<BridgeEvent>> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
     {
         var changes = await eventHandler.GetFilterChangesAsync(filter);
 
         foreach (var change in changes)
         {
-            logger.LogWarning("Source Event catched");
+            logger.LogWarning("Destination Event catched");
             var @event = await handler(change.Event, change.Log.TransactionHash);
-            var json = JsonSerializer.Serialize(@event);
-            var model = JsonSerializer.Deserialize<BridgeEvent>(json);
 
-            if (model is null)
-                throw new ArgumentNullException();
-
-            model.Id = change.Log.TransactionHash;
-            model.BlockNumber = change.Log.BlockNumber.ToString();
-            model.ChainName = "Ethereum";
-            model.CreatedDate = DateTime.Now;
-
-            await context.BridgeEvents.AddAsync(model, cancellationToken);
+            await CreateEvent(@event, change, cancellationToken);
         }
     }
 
-    private async Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent ,string txHash)
+    private async Task CreateEvent<T>(BridgeEvent @event, EventLog<T> change, CancellationToken cancellationToken)
+    {
+        var json = JsonSerializer.Serialize(@event);
+        var model = JsonSerializer.Deserialize<BridgeEvent>(json);
+
+        if (model is null)
+            throw new ArgumentNullException();
+
+        model.Id = change.Log.TransactionHash;
+        model.BlockNumber = change.Log.BlockNumber.ToString();
+        model.ChainName = "Ethereum";
+        model.CreatedDate = DateTime.Now;
+        await context.BridgeEvents.AddAsync(model, cancellationToken);
+    }
+
+    private async Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -140,9 +328,11 @@ public class SourceEventsListenerService : BackgroundService
         var json = JsonSerializer.Serialize(jsonObj);
 
         var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == unlockEvent.TxHash);
-
-        lockEvent!.IsClaimed = true;
-        lockEvent.ClaimedFromId = txHash;
+        if (lockEvent is not null)
+        {
+            lockEvent!.IsClaimed = true;
+            lockEvent.ClaimedFromId = txHash;
+        }
 
         return new BridgeEvent
         {
@@ -166,9 +356,11 @@ public class SourceEventsListenerService : BackgroundService
         var json = JsonSerializer.Serialize(jsonObj);
 
         var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == mintEvent.TxHash);
-
-        lockEvent!.IsClaimed = true;
-        lockEvent.ClaimedFromId = txHash;
+        if (lockEvent is not null)
+        {
+            lockEvent!.IsClaimed = true;
+            lockEvent.ClaimedFromId = txHash;
+        }
 
         return new BridgeEvent
         {

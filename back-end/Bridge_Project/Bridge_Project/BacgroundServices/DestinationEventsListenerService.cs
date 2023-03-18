@@ -2,9 +2,7 @@
 using Bridge_Project.Data.Enums;
 using Bridge_Project.Data.Models;
 using Bridge_Project.EventsDTO;
-using Bridge_Project.Services.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Nethereum.ABI.FunctionEncoding.Attributes;
 using Nethereum.Contracts;
 using Nethereum.Hex.HexTypes;
@@ -13,7 +11,6 @@ using Nethereum.Web3;
 using Nethereum.Web3.Accounts;
 using System.Numerics;
 using System.Text.Json;
-using System.Threading;
 
 namespace Bridge_Project.BacgroundServices;
 
@@ -25,11 +22,14 @@ public class DestinationEventsListenerService : BackgroundService
     private readonly BridgeContext context;
     private readonly ILogger<BridgeContext> logger;
     private readonly IConfiguration configuration;
-    public DestinationEventsListenerService(BridgeContext context, ILogger<BridgeContext> logger, IConfiguration configuration)
+    private readonly DbContextOptions<BridgeContext> _options;
+
+    public DestinationEventsListenerService(BridgeContext context, ILogger<BridgeContext> logger, IConfiguration configuration, DbContextOptions<BridgeContext> options)
     {
         this.context = context;
         this.logger = logger;
         this.configuration = configuration;
+        this._options = options;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -99,21 +99,122 @@ public class DestinationEventsListenerService : BackgroundService
     {
         var latestBlock = await web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
 
-        List<FilterLog> result = new List<FilterLog>(); ;
+        List<FilterLog> result = new List<FilterLog>();
         BridgeEvent lastSavedBlockNumber;
+        var count = 0;
+        using (var context = new BridgeContext(_options))
+        {
+            count = await context.BridgeEvents.Where(x=>x.ChainName == "BSC").CountAsync(cancellationToken);
+        }
 
-        if (await this.context.BridgeEvents.CountAsync(cancellationToken) != 0)
+        if (count != 0)
         {
             // if we don't have records we can maybe have the bridge deployed block number
-
-            lastSavedBlockNumber = await this.context.BridgeEvents.OrderByDescending(x => x.CreatedDate).FirstAsync(cancellationToken);
-
-            foreach (var filter in filterInputs)
+            using (var context = new BridgeContext(_options))
             {
-                filter.FromBlock = new BlockParameter(new HexBigInteger(BigInteger.Parse(lastSavedBlockNumber.BlockNumber)));
-                filter.ToBlock = new BlockParameter(latestBlock);
-                var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
-                result.AddRange(logs);
+                lastSavedBlockNumber = await context.BridgeEvents.Where(x => x.ChainName == "BSC").OrderByDescending(x => x.BlockNumber).FirstAsync(cancellationToken);
+            }
+
+            var batchSize = 5000;
+            var fromBlock = new BlockParameter(new HexBigInteger(BigInteger.Parse(lastSavedBlockNumber.BlockNumber)));
+            for (var i = fromBlock.BlockNumber; i <= latestBlock.Value; i.Value += batchSize)
+            {
+                var batchEnd = i.Value + batchSize - 1;
+                if (batchEnd > latestBlock.Value)
+                {
+                    batchEnd = latestBlock.Value;
+                }
+
+                Console.WriteLine($"From block {fromBlock.BlockNumber} to {batchEnd}");
+                foreach (var filter in filterInputs)
+                {
+                    filter.FromBlock = fromBlock;
+                    filter.ToBlock = new BlockParameter(batchEnd.ToHexBigInteger());
+                    var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
+                    result.AddRange(logs);
+                    Console.WriteLine($"Count events -> {logs.Count()}");
+
+                }
+            }
+
+            foreach (var item in result)
+            {
+                bool isEventSaved;
+                using (var context = new BridgeContext(_options))
+                {
+                    isEventSaved = await context.BridgeEvents.AnyAsync(x => x.Id == item.TransactionHash, cancellationToken);
+                }
+
+                if (!isEventSaved)
+                {
+                    if (item.IsLogForEvent<LockEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<LockEventDTO>();
+
+                        var newEvent = await HandleLockEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("LockEvent");
+                    }
+                    else if (item.IsLogForEvent<UnlockEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<UnlockEventDTO>();
+
+                        var newEvent = await HandleUnlockEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("UnlockEvent");
+                    }
+                    else if (item.IsLogForEvent<MintEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<MintEventDTO>();
+
+                        var newEvent = await HandleMintEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("MintEvent");
+                    }
+                    else if (item.IsLogForEvent<BurnEventDTO>())
+                    {
+                        var eventLog = item.DecodeEvent<BurnEventDTO>();
+
+                        var newEvent = await HandleBurnEvent(eventLog.Event, eventLog.Log.TransactionHash);
+
+                        await CreateEvent(newEvent, eventLog, cancellationToken);
+
+                        Console.WriteLine("BurnEvent");
+                    }
+                }
+            }
+
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            // if we don't have any records start doingsomething like pagination
+            var batchSize = 5000;
+            var fromBlock = new BlockParameter(new HexBigInteger(BigInteger.Parse("28012813")));
+            for (var i = fromBlock.BlockNumber; i <= latestBlock.Value; i.Value += batchSize)
+            {
+                var batchEnd = i.Value + batchSize - 1;
+                if (batchEnd > latestBlock.Value)
+                {
+                    batchEnd = latestBlock.Value;
+                }
+
+                Console.WriteLine($"From block {fromBlock.BlockNumber} to {batchEnd}");
+                foreach (var filter in filterInputs)
+                {
+                    filter.FromBlock = fromBlock;
+                    filter.ToBlock = new BlockParameter(batchEnd.ToHexBigInteger());
+                    var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
+                    result.AddRange(logs);
+                    Console.WriteLine($"Count events -> {logs.Count()}");
+
+                }
             }
 
             foreach (var item in result)
@@ -230,9 +331,11 @@ public class DestinationEventsListenerService : BackgroundService
         var json = JsonSerializer.Serialize(jsonObj);
 
         var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == unlockEvent.TxHash);
-
-        lockEvent!.IsClaimed = true;
-        lockEvent!.ClaimedFromId = txHash;
+        if (lockEvent is not null)
+        {
+            lockEvent!.IsClaimed = true;
+            lockEvent!.ClaimedFromId = txHash;
+        }
 
         return new BridgeEvent
         {
@@ -256,9 +359,11 @@ public class DestinationEventsListenerService : BackgroundService
         var json = JsonSerializer.Serialize(jsonObj);
 
         var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == mintEvent.TxHash);
-        lockEvent!.IsClaimed = true;
-
-        lockEvent.ClaimedFromId = txHash;
+        if (lockEvent is not null)
+        {
+            lockEvent!.IsClaimed = true;
+            lockEvent!.ClaimedFromId = txHash;
+        }
 
         return new BridgeEvent
         {
