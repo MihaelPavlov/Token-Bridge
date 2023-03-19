@@ -2,6 +2,7 @@
 using Bridge_Project.Data.Enums;
 using Bridge_Project.Data.Models;
 using Bridge_Project.EventsDTO;
+using Bridge_Project.Singleton;
 using Microsoft.EntityFrameworkCore;
 using Nethereum.ABI.FunctionEncoding.Attributes;
 using Nethereum.Contracts;
@@ -19,22 +20,22 @@ public class DestinationEventsListenerService : BackgroundService
     private const string Abi = @"
 ""[	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""wrappedToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""burn\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""sourceToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""lock\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""message\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""LogMessage\"",		\""type\"": \""event\""	},	{		\""inputs\"": [			{				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""internalType\"": \""address\"",				\""name\"": \""sourceToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			},			{				\""internalType\"": \""string\"",				\""name\"": \""name\"",				\""type\"": \""string\""			},			{				\""internalType\"": \""string\"",				\""name\"": \""symbol\"",				\""type\"": \""string\""			}		],		\""name\"": \""mint\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""internalType\"": \""address\"",				\""name\"": \""sourceToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""mint\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""wrappedToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""address\"",				\""name\"": \""sourceToken\"",				\""type\"": \""address\""			}		],		\""name\"": \""setWrappedToSourceToken\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""sender\"",				\""type\"": \""address\""			},			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""TokenBurned\"",		\""type\"": \""event\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""sender\"",				\""type\"": \""address\""			},			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""TokenLocked\"",		\""type\"": \""event\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": false,				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""to\"",				\""type\"": \""address\""			},			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""TokenMinted\"",		\""type\"": \""event\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": false,				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""to\"",				\""type\"": \""address\""			},			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""TokenUnlocked\"",		\""type\"": \""event\""	},	{		\""inputs\"": [			{				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""internalType\"": \""address\"",				\""name\"": \""originalToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""unlock\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""wrappedToken\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""originalToken\"",				\""type\"": \""address\""			}		],		\""name\"": \""WrappedTokenCreated\"",		\""type\"": \""event\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			}		],		\""name\"": \""getBytes\"",		\""outputs\"": [			{				\""internalType\"": \""bytes32\"",				\""name\"": \""\"",				\""type\"": \""bytes32\""			}		],		\""stateMutability\"": \""pure\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""bytes32\"",				\""name\"": \""\"",				\""type\"": \""bytes32\""			}		],		\""name\"": \""lockedTokens\"",		\""outputs\"": [			{				\""internalType\"": \""uint256\"",				\""name\"": \""\"",				\""type\"": \""uint256\""			}		],		\""stateMutability\"": \""view\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			}		],		\""name\"": \""sourceToWrappedTokenMap\"",		\""outputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			}		],		\""stateMutability\"": \""view\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			}		],		\""name\"": \""wrappedToSourceTokenMap\"",		\""outputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			}		],		\""stateMutability\"": \""view\"",		\""type\"": \""function\""	}]""
 ";
-    private readonly BridgeContext context;
     private readonly ILogger<BridgeContext> logger;
     private readonly IConfiguration configuration;
     private readonly DbContextOptions<BridgeContext> _options;
+    private readonly EventTracker tracker;
 
-    public DestinationEventsListenerService(BridgeContext context, ILogger<BridgeContext> logger, IConfiguration configuration, DbContextOptions<BridgeContext> options)
+    public DestinationEventsListenerService(ILogger<BridgeContext> logger, IConfiguration configuration, DbContextOptions<BridgeContext> options, EventTracker tracker)
     {
-        this.context = context;
         this.logger = logger;
         this.configuration = configuration;
         this._options = options;
+        this.tracker = EventTracker.Instance;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogWarning("Initialzie Destination Service");
+        this.logger.LogInformation("Initialzie Destination Service");
         var privateKey = configuration.GetValue(typeof(string), "DestinationPrivateKey").ToString();
         var contractAddress = configuration.GetValue(typeof(string), "DestinationBridgeContractAddress").ToString();
         var account = new Account(privateKey);
@@ -69,157 +70,92 @@ public class DestinationEventsListenerService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            logger.LogWarning("Inside While Loop");
+            this.logger.LogInformation("Inside While Loop");
 
             try
             {
                 var tasks = new List<Task>();
+                using (var context = new BridgeContext(_options))
+                {
+                    tasks.Add(ProcessEventChangesAsync(lockEventHandler, filter, HandleLockEvent, context, stoppingToken));
+                    tasks.Add(ProcessEventChangesAsync(unlockEventHandler, filter1, HandleUnlockEvent, context, stoppingToken));
+                    tasks.Add(ProcessEventChangesAsync(mintEventHandler, filter2, HandleMintEvent, context, stoppingToken));
+                    tasks.Add(ProcessEventChangesAsync(burnEventHandler, filter3, HandleBurnEvent, context, stoppingToken));
 
-                tasks.Add(ProcessEventChangesAsync(lockEventHandler, filter, HandleLockEvent, stoppingToken));
-                tasks.Add(ProcessEventChangesAsync(unlockEventHandler, filter1, HandleUnlockEvent, stoppingToken));
-                tasks.Add(ProcessEventChangesAsync(mintEventHandler, filter2, HandleMintEvent, stoppingToken));
-                tasks.Add(ProcessEventChangesAsync(burnEventHandler, filter3, HandleBurnEvent, stoppingToken));
+                    await Task.WhenAll(tasks);
 
-                await Task.WhenAll(tasks);
-
-                await context.SaveChangesAsync();
-                logger.LogWarning("Changes saved");
+                    await context.SaveChangesAsync();
+                    this.logger.LogInformation("Events are saved");
+                }
 
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex.Message);
+                this.logger.LogError(ex.Message);
             }
 
-            await Task.Delay(10000, stoppingToken); // 1min
+            await Task.Delay(10000, stoppingToken); //TODO: Put the block milliseconds 
         }
     }
 
+    /// <summary>
+    /// Checking for events before start listening for new events.
+    /// Case 1: if there are events in the database, we are getting the last saved event and use it as a starting point for fetching the new events.
+    /// Case 2: if there are no events in the database, we start fetching events from the block number on which the bridge contract was created/deployed.
+    /// </summary>
     private async Task CheckForEvents(Web3 web3, List<NewFilterInput> filterInputs, CancellationToken cancellationToken)
     {
         var latestBlock = await web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
 
-        List<FilterLog> result = new List<FilterLog>();
-        BridgeEvent lastSavedBlockNumber;
-        var count = 0;
+        int count;
+        List<FilterLog> filterLogs = new List<FilterLog>();
+
         using (var context = new BridgeContext(_options))
         {
-            count = await context.BridgeEvents.Where(x=>x.ChainName == "BSC").CountAsync(cancellationToken);
+            count = await context.BridgeEvents.CountAsync(x => x.ChainName == "BSC", cancellationToken);
         }
 
         if (count != 0)
         {
-            // if we don't have records we can maybe have the bridge deployed block number
+            BridgeEvent lastSavedEvent;
+
             using (var context = new BridgeContext(_options))
             {
-                lastSavedBlockNumber = await context.BridgeEvents.Where(x => x.ChainName == "BSC").OrderByDescending(x => x.BlockNumber).FirstAsync(cancellationToken);
+                lastSavedEvent = await context.BridgeEvents.Where(x => x.ChainName == "BSC").OrderByDescending(x => x.BlockNumber).FirstAsync(cancellationToken);
             }
 
-            var batchSize = 5000;
-            var fromBlock = new BlockParameter(new HexBigInteger(BigInteger.Parse(lastSavedBlockNumber.BlockNumber)));
-            for (var i = fromBlock.BlockNumber; i <= latestBlock.Value; i.Value += batchSize)
-            {
-                var batchEnd = i.Value + batchSize - 1;
-                if (batchEnd > latestBlock.Value)
-                {
-                    batchEnd = latestBlock.Value;
-                }
+            await FetchEvents(batchSize: 5000, //TODO: Move batchSize to appsetting.
+              fromBlock: new BlockParameter(new HexBigInteger(BigInteger.Parse(lastSavedEvent.BlockNumber))),
+              latestBlock: latestBlock,
+              web3,
+              filterInputs,
+              filterLogs);
 
-                Console.WriteLine($"From block {fromBlock.BlockNumber} to {batchEnd}");
-                foreach (var filter in filterInputs)
-                {
-                    filter.FromBlock = fromBlock;
-                    filter.ToBlock = new BlockParameter(batchEnd.ToHexBigInteger());
-                    var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
-                    result.AddRange(logs);
-                    Console.WriteLine($"Count events -> {logs.Count()}");
-
-                }
-            }
-
-            foreach (var item in result)
-            {
-                bool isEventSaved;
-                using (var context = new BridgeContext(_options))
-                {
-                    isEventSaved = await context.BridgeEvents.AnyAsync(x => x.Id == item.TransactionHash, cancellationToken);
-                }
-
-                if (!isEventSaved)
-                {
-                    if (item.IsLogForEvent<LockEventDTO>())
-                    {
-                        var eventLog = item.DecodeEvent<LockEventDTO>();
-
-                        var newEvent = await HandleLockEvent(eventLog.Event, eventLog.Log.TransactionHash);
-
-                        await CreateEvent(newEvent, eventLog, cancellationToken);
-
-                        Console.WriteLine("LockEvent");
-                    }
-                    else if (item.IsLogForEvent<UnlockEventDTO>())
-                    {
-                        var eventLog = item.DecodeEvent<UnlockEventDTO>();
-
-                        var newEvent = await HandleUnlockEvent(eventLog.Event, eventLog.Log.TransactionHash);
-
-                        await CreateEvent(newEvent, eventLog, cancellationToken);
-
-                        Console.WriteLine("UnlockEvent");
-                    }
-                    else if (item.IsLogForEvent<MintEventDTO>())
-                    {
-                        var eventLog = item.DecodeEvent<MintEventDTO>();
-
-                        var newEvent = await HandleMintEvent(eventLog.Event, eventLog.Log.TransactionHash);
-
-                        await CreateEvent(newEvent, eventLog, cancellationToken);
-
-                        Console.WriteLine("MintEvent");
-                    }
-                    else if (item.IsLogForEvent<BurnEventDTO>())
-                    {
-                        var eventLog = item.DecodeEvent<BurnEventDTO>();
-
-                        var newEvent = await HandleBurnEvent(eventLog.Event, eventLog.Log.TransactionHash);
-
-                        await CreateEvent(newEvent, eventLog, cancellationToken);
-
-                        Console.WriteLine("BurnEvent");
-                    }
-                }
-            }
-
-            await context.SaveChangesAsync(cancellationToken);
+            await ProcessLogs(filterLogs, cancellationToken);
         }
         else
         {
-            // if we don't have any records start doingsomething like pagination
-            var batchSize = 5000;
-            var fromBlock = new BlockParameter(new HexBigInteger(BigInteger.Parse("28012813")));
-            for (var i = fromBlock.BlockNumber; i <= latestBlock.Value; i.Value += batchSize)
+            await FetchEvents(batchSize: 5000, //TODO: Move batchSize to appsetting.
+                fromBlock: new BlockParameter(new HexBigInteger(BigInteger.Parse("28012813"))), //TODO: Move the block number in appsettings:  this should be deployed contract bridge block number
+                latestBlock: latestBlock,
+                web3,
+                filterInputs,
+                filterLogs);
+
+            await ProcessLogs(filterLogs, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Processes a list of event logs and saves them to a database.
+    /// </summary>
+    private async Task ProcessLogs(List<FilterLog> filterLogs, CancellationToken cancellationToken)
+    {
+        using (var context = new BridgeContext(_options))
+        {
+            foreach (var item in filterLogs)
             {
-                var batchEnd = i.Value + batchSize - 1;
-                if (batchEnd > latestBlock.Value)
-                {
-                    batchEnd = latestBlock.Value;
-                }
-
-                Console.WriteLine($"From block {fromBlock.BlockNumber} to {batchEnd}");
-                foreach (var filter in filterInputs)
-                {
-                    filter.FromBlock = fromBlock;
-                    filter.ToBlock = new BlockParameter(batchEnd.ToHexBigInteger());
-                    var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
-                    result.AddRange(logs);
-                    Console.WriteLine($"Count events -> {logs.Count()}");
-
-                }
-            }
-
-            foreach (var item in result)
-            {
-                var isEventSaved = await this.context.BridgeEvents.AnyAsync(x => x.Id == item.TransactionHash, cancellationToken);
+                bool isEventSaved = await context.BridgeEvents.AnyAsync(x => x.Id == item.TransactionHash, cancellationToken);
 
                 if (!isEventSaved)
                 {
@@ -229,9 +165,9 @@ public class DestinationEventsListenerService : BackgroundService
 
                         var newEvent = await HandleLockEvent(eventLog.Event, eventLog.Log.TransactionHash);
 
-                        await CreateEvent(newEvent, eventLog, cancellationToken);
+                        await CreateEvent(newEvent, eventLog, context, cancellationToken);
 
-                        Console.WriteLine("LockEvent");
+                        this.logger.LogInformation("Lock Event is Processed");
                     }
                     else if (item.IsLogForEvent<UnlockEventDTO>())
                     {
@@ -239,9 +175,9 @@ public class DestinationEventsListenerService : BackgroundService
 
                         var newEvent = await HandleUnlockEvent(eventLog.Event, eventLog.Log.TransactionHash);
 
-                        await CreateEvent(newEvent, eventLog, cancellationToken);
+                        await CreateEvent(newEvent, eventLog, context, cancellationToken);
 
-                        Console.WriteLine("UnlockEvent");
+                        this.logger.LogInformation("Unlock Event is Processed");
                     }
                     else if (item.IsLogForEvent<MintEventDTO>())
                     {
@@ -249,9 +185,9 @@ public class DestinationEventsListenerService : BackgroundService
 
                         var newEvent = await HandleMintEvent(eventLog.Event, eventLog.Log.TransactionHash);
 
-                        await CreateEvent(newEvent, eventLog, cancellationToken);
+                        await CreateEvent(newEvent, eventLog, context, cancellationToken);
 
-                        Console.WriteLine("MintEvent");
+                        this.logger.LogInformation("Mint Event is Processed");
                     }
                     else if (item.IsLogForEvent<BurnEventDTO>())
                     {
@@ -259,9 +195,9 @@ public class DestinationEventsListenerService : BackgroundService
 
                         var newEvent = await HandleBurnEvent(eventLog.Event, eventLog.Log.TransactionHash);
 
-                        await CreateEvent(newEvent, eventLog, cancellationToken);
+                        await CreateEvent(newEvent, eventLog, context, cancellationToken);
 
-                        Console.WriteLine("BurnEvent");
+                        this.logger.LogInformation("Burn Event is Processed");
                     }
                 }
             }
@@ -270,35 +206,68 @@ public class DestinationEventsListenerService : BackgroundService
         }
     }
 
-    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, string, Task<BridgeEvent>> handler, CancellationToken cancellationToken) where T : IEventDTO, new()
+    /// <summary>
+    /// Allows for efficient retrieval of a large number of log events from the Ethereum blockchain in batches, by limiting the number of logs fetched in each call to the GetLogs method.
+    /// </summary>
+    /// <param name="batchSize">Determines the number of log events to be fetched in each batch when retrieving logs from a range of blocks.</param>
+    /// <param name="fromBlock">Used to specify the starting block.</param>
+    /// <param name="latestBlock">Used to specify the latest block.</param>
+    private async Task FetchEvents(int batchSize, BlockParameter fromBlock, HexBigInteger latestBlock, Web3 web3, List<NewFilterInput> filterInputs, List<FilterLog> filterLogs)
     {
-        var changes = await eventHandler.GetFilterChangesAsync(filter);
-
-        foreach (var change in changes)
+        for (var i = fromBlock.BlockNumber; i <= latestBlock.Value; i.Value += batchSize)
         {
-            logger.LogWarning("Destination Event catched");
-            var @event = await handler(change.Event, change.Log.TransactionHash);
+            var batchEnd = i.Value + batchSize - 1;
+            if (batchEnd > latestBlock.Value)
+            {
+                batchEnd = latestBlock.Value;
+            }
 
-            await CreateEvent(@event, change, cancellationToken);
+            this.logger.LogInformation($"-- From block {fromBlock.BlockNumber} to {batchEnd} --");
+            foreach (var filter in filterInputs)
+            {
+                filter.FromBlock = fromBlock;
+                filter.ToBlock = new BlockParameter(batchEnd.ToHexBigInteger());
+                var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
+                filterLogs.AddRange(logs);
+                this.logger.LogInformation($"Logs -> {logs.Count()}");
+            }
         }
     }
 
-    private async Task CreateEvent<T>(BridgeEvent @event, EventLog<T> change, CancellationToken cancellationToken)
+    private async Task ProcessEventChangesAsync<T>(Event<T> eventHandler, HexBigInteger filter, Func<T, string, Task<BridgeEvent>> handler, BridgeContext context, CancellationToken cancellationToken) where T : IEventDTO, new()
+    {
+        var changes = await eventHandler.GetFilterChangesAsync(filter);
+
+        logger.LogInformation($"Destination events {changes.Count}");
+
+        foreach (var change in changes)
+        {
+            var @event = await handler(change.Event, change.Log.TransactionHash);
+
+            await CreateEvent(@event, change, context, cancellationToken);
+        }
+    }
+
+    private async Task CreateEvent<T>(BridgeEvent @event, EventLog<T> change, BridgeContext context, CancellationToken cancellationToken)
     {
         var json = JsonSerializer.Serialize(@event);
         var model = JsonSerializer.Deserialize<BridgeEvent>(json);
 
         if (model is null)
-            throw new ArgumentNullException();
+        {
+            this.logger.LogError($"Deserialization unsuccessfully for event with transaction hash [{change.Log.TransactionHash}]");
+            return;
+        }
 
         model.Id = change.Log.TransactionHash;
         model.BlockNumber = change.Log.BlockNumber.ToString();
-        model.ChainName = "BSC";
+        model.ChainName = "BSC"; // TODO: Move in app setings
         model.CreatedDate = DateTime.Now;
+
         await context.BridgeEvents.AddAsync(model, cancellationToken);
     }
 
-    private async Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent, string txHash)
+    private Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -309,17 +278,17 @@ public class DestinationEventsListenerService : BackgroundService
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        return new BridgeEvent
+        return Task.FromResult(new BridgeEvent
         {
             PublicKeySender = lockEvent.Sender,
             EventType = (int)EventType.TokenLocked,
             RequiresClaiming = true,
             IsClaimed = false,
             JsonData = json
-        };
+        });
     }
 
-    private async Task<BridgeEvent> HandleUnlockEvent(UnlockEventDTO unlockEvent, string txHash)
+    private Task<BridgeEvent> HandleUnlockEvent(UnlockEventDTO unlockEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -330,24 +299,19 @@ public class DestinationEventsListenerService : BackgroundService
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == unlockEvent.TxHash);
-        if (lockEvent is not null)
-        {
-            lockEvent!.IsClaimed = true;
-            lockEvent!.ClaimedFromId = txHash;
-        }
+        this.tracker.AddEvent(unlockEvent.TxHash, txHash);
 
-        return new BridgeEvent
+        return Task.FromResult(new BridgeEvent
         {
             PublicKeySender = unlockEvent.To,
             EventType = (int)EventType.TokenUnlocked,
             RequiresClaiming = false,
             IsClaimed = false,
             JsonData = json
-        };
+        });
     }
 
-    private async Task<BridgeEvent> HandleMintEvent(MintEventDTO mintEvent, string txHash)
+    private Task<BridgeEvent> HandleMintEvent(MintEventDTO mintEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -358,24 +322,19 @@ public class DestinationEventsListenerService : BackgroundService
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        var lockEvent = await this.context.BridgeEvents.AsTracking().FirstOrDefaultAsync(x => x.Id == mintEvent.TxHash);
-        if (lockEvent is not null)
-        {
-            lockEvent!.IsClaimed = true;
-            lockEvent!.ClaimedFromId = txHash;
-        }
+        this.tracker.AddEvent(mintEvent.TxHash, txHash);
 
-        return new BridgeEvent
+        return Task.FromResult(new BridgeEvent
         {
             PublicKeySender = mintEvent.To,
             EventType = (int)EventType.TokenMinted,
             RequiresClaiming = false,
             IsClaimed = false,
             JsonData = json
-        };
+        });
     }
 
-    private async Task<BridgeEvent> HandleBurnEvent(BurnEventDTO burnEvent, string txHash)
+    private Task<BridgeEvent> HandleBurnEvent(BurnEventDTO burnEvent, string txHash)
     {
         var jsonObj = new
         {
@@ -386,13 +345,13 @@ public class DestinationEventsListenerService : BackgroundService
 
         var json = JsonSerializer.Serialize(jsonObj);
 
-        return new BridgeEvent
+        return Task.FromResult(new BridgeEvent
         {
             PublicKeySender = burnEvent.Sender,
             EventType = (int)EventType.TokenBurned,
             RequiresClaiming = true,
             IsClaimed = false,
             JsonData = json
-        };
+        });
     }
 }

@@ -1,6 +1,7 @@
 using Bridge_Project.BacgroundServices;
 using Bridge_Project.Data;
 using Bridge_Project.Services;
+using Bridge_Project.Singleton;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,8 +12,10 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddSingleton<EventTracker>();
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddServiceLayer();
+builder.Services.AddHostedService<EventCheckerService>();
 builder.Services.AddHostedService<SourceEventsListenerService>();
 builder.Services.AddHostedService<DestinationEventsListenerService>();
 
