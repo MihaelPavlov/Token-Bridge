@@ -17,24 +17,23 @@ public class SourceEventService : ISourceEventService
         this.logger = logger;
     }
 
-    public async Task<IEnumerable<BridgeEvent>> GetAllLockEvents(CancellationToken cancellationToken) => await this.context.BridgeEvents.Where(x => !x.IsClaimed && x.EventType == (int)EventType.TokenLocked).ToListAsync(cancellationToken);
-    public async Task<IEnumerable<BridgeEvent>> GetAllBurnEvents(CancellationToken cancellationToken) => await this.context.BridgeEvents.Where(x => !x.IsClaimed && x.EventType == (int)EventType.TokenBurned).ToListAsync(cancellationToken);
-
-    public async Task<IEnumerable<BridgeEvent>> GetAllByPublicKey(string publicKey, CancellationToken cancellationToken) => await this.context.BridgeEvents.Where(x => !x.IsClaimed && x.EventType == (int)EventType.TokenLocked && x.PublicKeySender == publicKey).ToListAsync(cancellationToken);
-
-    public async Task<IEnumerable<BridgeEvent>> GetAllByType(EventType eventType, CancellationToken cancellationToken) => await this.context.BridgeEvents.Where(x => x.EventType == (int)eventType).ToListAsync(cancellationToken);
-
-    public async Task<BridgeEvent> GetByTransactionHash(string txHash, CancellationToken cancellationToken) => await this.context.BridgeEvents.FirstAsync(x => x.Id == txHash, cancellationToken);
-
-    public async Task<string> GetLastBlockNumberFromEvents(CancellationToken cancellationToken)
+    public async Task<IEnumerable<BridgeEvent>> GetAll(CancellationToken cancellationToken)
     {
-        var result = await this.context.BridgeEvents.OrderByDescending(x => x.CreatedDate).FirstAsync(cancellationToken);
-
-        return result.BlockNumber;
+        return await this.context.BridgeEvents.Include(x => x.ClaimedFrom).Where(x => x.ClaimedFromId != null).ToListAsync(cancellationToken);
     }
 
-    public async Task<bool> IsEventSaved(string txHash, CancellationToken cancellationToken)
+    public async Task<IEnumerable<BridgeEvent>> GetAllByPublicKey(string publicKey, CancellationToken cancellationToken)
     {
-        return await this.context.BridgeEvents.AnyAsync(x => x.Id == txHash, cancellationToken);
+        return await this.context.BridgeEvents.Include(x => x.ClaimedFrom).Where(x => x.ClaimedFromId != null && x.PublicKeySender == publicKey).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<BridgeEvent>> GetAllEventsForClaiming(CancellationToken cancellationToken)
+    {
+        return await this.context.BridgeEvents.Where(x => x.RequiresClaiming == true && x.IsClaimed == false && x.EventType == (int)EventType.TokenLocked).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<BridgeEvent>> GetAllEventsForReleasing(CancellationToken cancellationToken)
+    {
+        return await this.context.BridgeEvents.Where(x => x.RequiresClaiming == true && x.IsClaimed == false && x.EventType == (int)EventType.TokenBurned).ToListAsync(cancellationToken);
     }
 }

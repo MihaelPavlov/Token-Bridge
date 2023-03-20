@@ -18,40 +18,41 @@ public class SourceBridgeController : Controller
     private string ContractAddress = "0xbc04519E66ce894b50587b9C8ac2aAB07F24fFB9";
 
     private readonly ISourceEventService eventService;
+
     public SourceBridgeController(ISourceEventService eventService)
     {
         this.eventService = eventService;
     }
 
-    [HttpGet("get-unclaimed-locked-events")]
+    [HttpGet("get-all")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BridgeEvent>))]
-    public async Task<IActionResult> GetUnclaimedLockEvents(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var result = await this.eventService.GetAllLockEvents(cancellationToken);
+        var result = await this.eventService.GetAll(cancellationToken);
         return this.Ok(result);
     }
 
-    [HttpGet("get-unclaimed-burned-events")]
+    [HttpGet("get-by-public-key")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BridgeEvent>))]
-    public async Task<IActionResult> GetUnclaimedBurnEvents(CancellationToken cancellationToken)
-    {
-        var result = await this.eventService.GetAllBurnEvents(cancellationToken);
-        return this.Ok(result);
-    }
-
-    [HttpGet("get-by-public-key-events")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BridgeEvent>))]
-    public async Task<IActionResult> GetUnclaimedBurnEvents(string publicKey,CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAllByPublicKey(string publicKey, CancellationToken cancellationToken)
     {
         var result = await this.eventService.GetAllByPublicKey(publicKey, cancellationToken);
         return this.Ok(result);
     }
 
-    [HttpGet("get-by-type-events")]
+    [HttpGet("get-all-for-claiming")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BridgeEvent>))]
-    public async Task<IActionResult> GetUnclaimedBurnEvents(EventType type, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAllEventsForClaiming(CancellationToken cancellationToken)
     {
-        var result = await this.eventService.GetAllByType(type, cancellationToken);
+        var result = await this.eventService.GetAllEventsForClaiming(cancellationToken);
+        return this.Ok(result);
+    }
+
+    [HttpGet("get-all-for-releasing")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BridgeEvent>))]
+    public async Task<IActionResult> GetAllEventsForReleasing(CancellationToken cancellationToken)
+    {
+        var result = await this.eventService.GetAllEventsForReleasing(cancellationToken);
         return this.Ok(result);
     }
 
