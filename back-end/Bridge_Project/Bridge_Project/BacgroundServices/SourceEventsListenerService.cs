@@ -1,11 +1,11 @@
-﻿using Bridge_Project.Data;
+﻿using Bridge_Project.BacgroundServices.Models;
+using Bridge_Project.Data;
 using Bridge_Project.Data.Enums;
 using Bridge_Project.Data.Models;
 using Bridge_Project.EventsDTO;
 using Bridge_Project.Singleton;
 using Microsoft.EntityFrameworkCore;
 using Nethereum.ABI.FunctionEncoding.Attributes;
-using Nethereum.BlockchainProcessing.BlockStorage.Entities;
 using Nethereum.Contracts;
 using Nethereum.Hex.HexTypes;
 using Nethereum.RPC.Eth.DTOs;
@@ -18,31 +18,35 @@ namespace Bridge_Project.BacgroundServices;
 
 public class SourceEventsListenerService : BackgroundService
 {
-    private const string Abi = @"
+    const string Abi = @"
 ""[	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""wrappedToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""burn\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""sourceToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""lock\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""message\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""LogMessage\"",		\""type\"": \""event\""	},	{		\""inputs\"": [			{				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""internalType\"": \""address\"",				\""name\"": \""sourceToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			},			{				\""internalType\"": \""string\"",				\""name\"": \""name\"",				\""type\"": \""string\""			},			{				\""internalType\"": \""string\"",				\""name\"": \""symbol\"",				\""type\"": \""string\""			}		],		\""name\"": \""mint\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""internalType\"": \""address\"",				\""name\"": \""sourceToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""mint\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""wrappedToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""address\"",				\""name\"": \""sourceToken\"",				\""type\"": \""address\""			}		],		\""name\"": \""setWrappedToSourceToken\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""sender\"",				\""type\"": \""address\""			},			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""TokenBurned\"",		\""type\"": \""event\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""sender\"",				\""type\"": \""address\""			},			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""TokenLocked\"",		\""type\"": \""event\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": false,				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""to\"",				\""type\"": \""address\""			},			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""TokenMinted\"",		\""type\"": \""event\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": false,				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""to\"",				\""type\"": \""address\""			},			{				\""indexed\"": false,				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""TokenUnlocked\"",		\""type\"": \""event\""	},	{		\""inputs\"": [			{				\""internalType\"": \""bytes32\"",				\""name\"": \""txHash\"",				\""type\"": \""bytes32\""			},			{				\""internalType\"": \""address\"",				\""name\"": \""originalToken\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""uint256\"",				\""name\"": \""amount\"",				\""type\"": \""uint256\""			}		],		\""name\"": \""unlock\"",		\""outputs\"": [],		\""stateMutability\"": \""nonpayable\"",		\""type\"": \""function\""	},	{		\""anonymous\"": false,		\""inputs\"": [			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""wrappedToken\"",				\""type\"": \""address\""			},			{				\""indexed\"": true,				\""internalType\"": \""address\"",				\""name\"": \""originalToken\"",				\""type\"": \""address\""			}		],		\""name\"": \""WrappedTokenCreated\"",		\""type\"": \""event\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""token\"",				\""type\"": \""address\""			}		],		\""name\"": \""getBytes\"",		\""outputs\"": [			{				\""internalType\"": \""bytes32\"",				\""name\"": \""\"",				\""type\"": \""bytes32\""			}		],		\""stateMutability\"": \""pure\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			},			{				\""internalType\"": \""bytes32\"",				\""name\"": \""\"",				\""type\"": \""bytes32\""			}		],		\""name\"": \""lockedTokens\"",		\""outputs\"": [			{				\""internalType\"": \""uint256\"",				\""name\"": \""\"",				\""type\"": \""uint256\""			}		],		\""stateMutability\"": \""view\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			}		],		\""name\"": \""sourceToWrappedTokenMap\"",		\""outputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			}		],		\""stateMutability\"": \""view\"",		\""type\"": \""function\""	},	{		\""inputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			}		],		\""name\"": \""wrappedToSourceTokenMap\"",		\""outputs\"": [			{				\""internalType\"": \""address\"",				\""name\"": \""\"",				\""type\"": \""address\""			}		],		\""stateMutability\"": \""view\"",		\""type\"": \""function\""	}]""
 ";
-    private readonly ILogger<BridgeContext> logger;
-    private readonly IConfiguration configuration;
-    private readonly DbContextOptions<BridgeContext> _options;
-    private readonly EventTracker tracker;
+    readonly ILogger<BridgeContext> logger;
+    readonly IConfiguration configuration;
+    readonly DbContextOptions<BridgeContext> options;
+    readonly EventTracker tracker;
+
+    readonly Network network;
 
     public SourceEventsListenerService(ILogger<BridgeContext> logger, IConfiguration configuration, DbContextOptions<BridgeContext> options, EventTracker tracker)
     {
         this.logger = logger;
         this.configuration = configuration;
-        _options = options;
+        this.options = options;
         this.tracker = EventTracker.Instance;
+        this.network = this.configuration.GetSection("Network_1").Get<Network>();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         this.logger.LogInformation("Initialize Source Service");
-        var privateKey = configuration.GetValue(typeof(string), "PrivateKey").ToString();
-        var contractAddress = configuration.GetValue(typeof(string), "SourceBridgeContractAddress").ToString();
-        var account = new Account(privateKey);
+
+        var account = new Account(this.network.PrivateKey);
         var web3 = new Web3(account, @"https://sepolia.infura.io/v3/31d722098d4e48929c96519ba339b2d0");
 
-        var contract = web3.Eth.GetContract(Abi, contractAddress);
+        var contract = web3.Eth.GetContract(Abi, this.network.BridgeContractAddress);
+
+        #region Initialize Events
         var lockEventHandler = contract.GetEvent<LockEventDTO>();
         var unlockEventHandler = contract.GetEvent<UnlockEventDTO>();
         var mintEventHandler = contract.GetEvent<MintEventDTO>();
@@ -59,17 +63,26 @@ public class SourceEventsListenerService : BackgroundService
 
         var filterInput3 = burnEventHandler.CreateFilterInput();
         var filter3 = await burnEventHandler.CreateFilterAsync(filterInput3);
+        #endregion Initialize Events
+
+        #region Calculate the Block Timestamp
+        var block1 = await web3.Eth.Blocks.GetBlockWithTransactionsByNumber.SendRequestAsync(new HexBigInteger(3076954));
+        var block2 = await web3.Eth.Blocks.GetBlockWithTransactionsByNumber.SendRequestAsync(new HexBigInteger(3076955));
+
+        var blockTimestamp = TimeSpan.FromSeconds((long)block2.Timestamp.Value) - TimeSpan.FromSeconds((long)block1.Timestamp.Value);
+        var milliseconds = int.Parse(blockTimestamp.TotalMilliseconds.ToString());
+        #endregion Calculate the Block Timestamp
 
         await CheckForEvents(web3, new List<NewFilterInput> { filterInput, filterInput1, filterInput2, filterInput3 }, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            this.logger.LogInformation("Inside While Loop");
+            this.logger.LogInformation("Inside While Loop 1");
 
             try
             {
                 var tasks = new List<Task>();
-                using (var context = new BridgeContext(_options))
+                using (var context = new BridgeContext(options))
                 {
                     tasks.Add(ProcessEventChangesAsync(lockEventHandler, filter, HandleLockEvent, context, stoppingToken));
                     tasks.Add(ProcessEventChangesAsync(unlockEventHandler, filter1, HandleUnlockEvent, context, stoppingToken));
@@ -103,21 +116,21 @@ public class SourceEventsListenerService : BackgroundService
         int count;
         List<FilterLog> filterLogs = new List<FilterLog>();
 
-        using (var context = new BridgeContext(_options))
+        using (var context = new BridgeContext(options))
         {
-            count = await context.BridgeEvents.CountAsync(x => x.ChainName == "Ethereum", cancellationToken);
+            count = await context.BridgeEvents.CountAsync(x => x.ChainName == this.network.Name, cancellationToken);
         }
 
         if (count != 0)
         {
             BridgeEvent lastSavedEvent;
 
-            using (var context = new BridgeContext(_options))
+            using (var context = new BridgeContext(options))
             {
-                lastSavedEvent = await context.BridgeEvents.Where(x => x.ChainName == "Ethereum").OrderByDescending(x => x.BlockNumber).FirstAsync(cancellationToken);
+                lastSavedEvent = await context.BridgeEvents.Where(x => x.ChainName == this.network.Name).OrderByDescending(x => x.BlockNumber).FirstAsync(cancellationToken);
             }
 
-            await FetchEvents(batchSize: 1000, //TODO: Move batchSize to appsetting.
+            await FetchEvents(batchSize: this.network.BatchSizeEvents,
               fromBlock: new BlockParameter(new HexBigInteger(BigInteger.Parse(lastSavedEvent.BlockNumber))),
               latestBlock: latestBlock,
               web3,
@@ -128,8 +141,8 @@ public class SourceEventsListenerService : BackgroundService
         }
         else
         {
-            await FetchEvents(batchSize: 1000, //TODO: Move batchSize to appsetting.
-                fromBlock: new BlockParameter(new HexBigInteger(BigInteger.Parse("3076964"))), //TODO: Move the block number in appsettings:  this should be deployed contract bridge block number
+            await FetchEvents(batchSize: this.network.BatchSizeEvents,
+                fromBlock: new BlockParameter(new HexBigInteger(BigInteger.Parse(this.network.DeployedContractBlockNumber))), //TODO: Move the block number in appsettings:  this should be deployed contract bridge block number
                 latestBlock: latestBlock,
                 web3,
                 filterInputs,
@@ -144,7 +157,7 @@ public class SourceEventsListenerService : BackgroundService
     /// </summary>
     private async Task ProcessLogs(List<FilterLog> filterLogs, CancellationToken cancellationToken)
     {
-        using (var context = new BridgeContext(_options))
+        using (var context = new BridgeContext(options))
         {
             foreach (var item in filterLogs)
             {
@@ -216,12 +229,16 @@ public class SourceEventsListenerService : BackgroundService
             }
 
             this.logger.LogInformation($"-- From block {fromBlock.BlockNumber} to {batchEnd} --");
+
             foreach (var filter in filterInputs)
             {
                 filter.FromBlock = fromBlock;
                 filter.ToBlock = new BlockParameter(batchEnd.ToHexBigInteger());
+
                 var logs = await web3.Eth.Filters.GetLogs.SendRequestAsync(filter);
+
                 filterLogs.AddRange(logs);
+
                 this.logger.LogInformation($"Logs -> {logs.Count()}");
             }
         }
@@ -254,12 +271,13 @@ public class SourceEventsListenerService : BackgroundService
 
         model.Id = change.Log.TransactionHash;
         model.BlockNumber = change.Log.BlockNumber.ToString();
-        model.ChainName = "Ethereum";// TODO: Move in app setings
+        model.ChainName = this.network.Name;
         model.CreatedDate = DateTime.Now;
 
         await context.BridgeEvents.AddAsync(model, cancellationToken);
     }
 
+    #region Handlers
     private Task<BridgeEvent> HandleLockEvent(LockEventDTO lockEvent, string txHash)
     {
         var jsonObj = new
@@ -347,4 +365,5 @@ public class SourceEventsListenerService : BackgroundService
             JsonData = json
         });
     }
+    #endregion Handlers
 }

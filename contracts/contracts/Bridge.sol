@@ -38,14 +38,12 @@ contract BridgeContract {
 
     mapping(address => address) public sourceToWrappedTokenMap;
     mapping(address => address) public wrappedToSourceTokenMap;
+    mapping(string => bool) public claimedTransactions;
 
-    function lock(
-        address sourceToken,
-        uint256 amount
-        // uint8 v,
-        // bytes32 r,
-        // bytes32 s
-    ) public {
+    function lock(address sourceToken, uint256 amount) public // uint8 v,
+    // bytes32 r,
+    // bytes32 s
+    {
         // ERC20Permit(sourceToken).permit(
         //     msg.sender,
         //     address(this),
@@ -65,7 +63,14 @@ contract BridgeContract {
         address originalToken,
         uint256 amount
     ) public {
+        require(
+            claimedTransactions[txHash] == false,
+            "The transaction hash was already claimed"
+        );
+
         IERC20(originalToken).safeTransfer(msg.sender, amount);
+
+        claimedTransactions[txHash] = true;
 
         emit Unlock(txHash, originalToken, msg.sender, amount);
     }
@@ -77,6 +82,11 @@ contract BridgeContract {
         string memory name,
         string memory symbol
     ) public {
+        require(
+            claimedTransactions[txHash] == false,
+            "The transaction hash was already claimed"
+        );
+
         if (sourceToWrappedTokenMap[sourceToken] == address(0)) {
             ERC20 token = ERC20(sourceToken);
             createWrappedToken(sourceToken, name, symbol, token.decimals());
@@ -86,6 +96,8 @@ contract BridgeContract {
             msg.sender,
             amount
         );
+
+        claimedTransactions[txHash] = true;
 
         emit Mint(
             txHash,
