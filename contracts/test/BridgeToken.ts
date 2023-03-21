@@ -39,8 +39,6 @@ describe("Bridge", function () {
     describe("lock", function () {
 
         it("Should transfer tokens to the contract", async () => {
-            const [owner, addr1] = await ethers.getSigners();
-
             await myToken.approve(bridge.address, 100000000);
 
             expect(await myToken.balanceOf(bridge.address)).to.equal(0);
@@ -50,16 +48,14 @@ describe("Bridge", function () {
         });
 
         it("Should transfer tokens successfully and emit event lock", async () => {
-            const [owner, addr1] = await ethers.getSigners();
-
+            const [owner] = await ethers.getSigners();
+            await myToken.mint(owner.address);
             await myToken.approve(bridge.address, 100000000);
 
             await expect(await bridge.lock(myToken.address, 100000)).to.emit(bridge, "Lock").withArgs(myToken.address, owner.address, 100000);
         });
 
         it("Unsuccessfully token transfer(error: InsufficientAllowance)", async () => {
-            const [owner, addr1] = await ethers.getSigners();
-
             await myToken.approve(bridge.address, 100000);
 
             await expect(bridge.lock(myToken.address, 1000001)).to.revertedWith("ERC20: insufficient allowance")
@@ -82,7 +78,7 @@ describe("Bridge", function () {
         })
 
         it("Should transfer successfully and emit event", async () => {
-            const [owner, addr1] = await ethers.getSigners();
+            const [owner] = await ethers.getSigners();
             await myToken.approve(bridge.address, 100000);
 
             await bridge.lock(myToken.address, 100000);
@@ -94,6 +90,15 @@ describe("Bridge", function () {
             await expect(bridge.unlock("txHash", myToken.address, 100000)).to.revertedWith("ERC20: transfer amount exceeds balance");
 
             expect(await myToken.balanceOf(bridge.address)).to.equal(0);
+        })
+
+        it("Should throw error when try unlock with the same txHash two times)", async () => {
+            await myToken.approve(bridge.address, 1000000);
+
+            await bridge.lock(myToken.address, 100000);
+
+            await bridge.unlock("txHash", myToken.address, 10000);
+            await expect(bridge.unlock("txHash", myToken.address, 10000)).to.revertedWith("The transaction hash was already claimed");
         })
     })
 
@@ -125,7 +130,7 @@ describe("Bridge", function () {
         });
 
         it("Successfully mint tokens to the sender", async () => {
-            const [owner, addr1] = await ethers.getSigners();
+            const [, addr1] = await ethers.getSigners();
             const tx = await bridge.connect(addr1).mint("txHash", myToken.address, 1, "TestToken", "TT");
             const receipt = await tx.wait();
 
@@ -138,7 +143,12 @@ describe("Bridge", function () {
                 expect(amount).to.equal("1");
             }
 
-            await bridge.connect(addr1).mint("txHash", myToken.address, 1, "TestToken", "TT")
+            await bridge.connect(addr1).mint("txHash2", myToken.address, 1, "TestToken", "TT")
+        });
+        
+        it("Should throw error when try mint with the same txHash two times", async () => {
+            await bridge.mint("txHash", myToken.address, 1,"TestToken","TT")
+            await expect(bridge.mint("txHash", myToken.address, 1,"TestToken","TT")).to.revertedWith("The transaction hash was already claimed");
         });
     });
 
@@ -148,7 +158,7 @@ describe("Bridge", function () {
         });
 
         it("Successfully removed tokens from burn", async () => {
-            const [owner, addr1] = await ethers.getSigners();
+            const [, addr1] = await ethers.getSigners();
 
             const tx = await bridge.connect(addr1).mint("txHash", myToken.address, 1, "TestToken", "TT");
             const receipt = await tx.wait();
@@ -165,7 +175,7 @@ describe("Bridge", function () {
         });
 
         it("Should successfully burn tokens and emit event", async () => {
-            const [owner, addr1] = await ethers.getSigners();
+            const [, addr1] = await ethers.getSigners();
 
             const tx = await bridge.connect(addr1).mint("txHash", myToken.address, 1, "TestToken", "TT");
             const receipt = await tx.wait();
