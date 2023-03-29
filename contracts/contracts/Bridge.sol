@@ -4,12 +4,8 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 import "./Tokens/WrappedToken.sol";
 
-// Integration Tests or Unit Tests,
-// Tests with Echidna
-// Static vs Dynamic Testing of contract
 contract BridgeContract {
     using SafeERC20 for IERC20;
 
@@ -40,20 +36,16 @@ contract BridgeContract {
     mapping(address => address) public wrappedToSourceTokenMap;
     mapping(string => bool) public claimedTransactions;
 
-    function lock(address sourceToken, uint256 amount) public // uint8 v,
-    // bytes32 r,
-    // bytes32 s
+    function lock(
+        address sourceToken,
+        uint256 amount 
+    ) public
     {
-        // ERC20Permit(sourceToken).permit(
-        //     msg.sender,
-        //     address(this),
-        //     amount,
-        //    2661766724,
-        //     v,
-        //     r,
-        //     s
-        // );
-        IERC20(sourceToken).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(sourceToken).safeTransferFrom(
+            msg.sender,
+            address(this),
+            amount
+        );
 
         emit Lock(sourceToken, msg.sender, amount);
     }
@@ -80,7 +72,8 @@ contract BridgeContract {
         address sourceToken,
         uint256 amount,
         string memory name,
-        string memory symbol
+        string memory symbol,
+        uint8 decimals
     ) public {
         require(
             claimedTransactions[txHash] == false,
@@ -88,8 +81,7 @@ contract BridgeContract {
         );
 
         if (sourceToWrappedTokenMap[sourceToken] == address(0)) {
-            ERC20 token = ERC20(sourceToken);
-            createWrappedToken(sourceToken, name, symbol, token.decimals());
+            createWrappedToken(sourceToken, name, symbol, decimals);
         }
 
         WrappedToken(sourceToWrappedTokenMap[sourceToken]).mint(
@@ -113,8 +105,13 @@ contract BridgeContract {
             address(wToken) != address(0),
             "There is no wrapped token with this address"
         );
+
         wToken.burn(msg.sender, amount);
-        emit Burn(wrappedToSourceTokenMap[wrappedToken], msg.sender, amount);
+        emit Burn(
+            wrappedToSourceTokenMap[wrappedToken],
+            msg.sender,
+            amount
+        );
     }
 
     function createWrappedToken(

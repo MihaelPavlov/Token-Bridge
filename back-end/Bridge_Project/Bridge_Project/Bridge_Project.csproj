@@ -26,4 +26,8 @@
     <ProjectReference Include="..\Bridge_Project.Services\Bridge_Project.Services.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Deploy\" />
+  </ItemGroup>
+
 </Project>

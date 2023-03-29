@@ -3,7 +3,7 @@ using Nethereum.ABI.FunctionEncoding.Attributes;
 
 namespace Bridge_Project.EventsDTO;
 
-[Event("TokenBurned")]
+[Event("Burn")]
 public class BurnEventDTO : IEventDTO
 {
     [Parameter("address", "token", 1, true)]

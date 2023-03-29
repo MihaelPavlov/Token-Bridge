@@ -3,7 +3,7 @@ using Nethereum.ABI.FunctionEncoding.Attributes;
 
 namespace Bridge_Project.EventsDTO;
 
-[Event("TokenUnlocked")]
+[Event("Unlock")]
 public class UnlockEventDTO : IEventDTO
 {
     [Parameter("string", "txHash", 1, false)]

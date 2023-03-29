@@ -3,7 +3,7 @@ using Nethereum.ABI.FunctionEncoding.Attributes;
 
 namespace Bridge_Project.EventsDTO;
 
-[Event("TokenMinted")]
+[Event("Mint")]
 public class MintEventDTO : IEventDTO
 {
     [Parameter("string", "txHash", 1, false)]

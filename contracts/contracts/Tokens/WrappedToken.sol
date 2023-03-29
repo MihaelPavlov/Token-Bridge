@@ -14,11 +14,15 @@ contract WrappedToken is ERC20 {
         _decimals = decimals;
     }
 
+    function decimals() public view override returns (uint8) {
+        return _decimals;
+    }
+
     function mint(address account, uint256 amount) public {
-        _mint(account, amount * 10**uint256(_decimals));
+        _mint(account, amount);
     }
 
     function burn(address account, uint256 amount) public {
-        _burn(account, amount * 10**uint256(_decimals));
+        _burn(account, amount);
     }
 }

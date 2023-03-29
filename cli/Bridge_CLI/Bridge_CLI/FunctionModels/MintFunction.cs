@@ -21,4 +21,7 @@ public class MintFunction : FunctionMessage
 
     [Parameter("string", "symbol", 5)]
     public string Symbol { get; set; } = null!;
+
+    [Parameter("uint8", "decimals", 6)]
+    public BigInteger Decimals { get; set; }
 }

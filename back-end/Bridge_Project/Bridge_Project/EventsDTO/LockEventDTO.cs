@@ -3,7 +3,7 @@ using Nethereum.ABI.FunctionEncoding.Attributes;
 
 namespace Bridge_Project.EventsDTO;
 
-[Event("TokenLocked")]
+[Event("Lock")]
 public class LockEventDTO : IEventDTO
 {
     [Parameter("address", "token", 1, true)]
